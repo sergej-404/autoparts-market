@@ -1,3 +1,42 @@
-export default function Page() {
-  return <main className="mx-auto max-w-7xl px-5 py-16"><h1 className="text-3xl font-black">Настройки</h1><p className="mt-3 text-gray-500">Страница подготовлена. Функциональность будет реализована следующим этапом.</p></main>;
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { ProfileSettings } from "./ProfileSettings";
+
+export default async function ProfileSettingsPage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session) redirect("/login");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      emailVerified: true,
+      phone: true,
+      image: true,
+      role: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user) redirect("/login");
+
+  return (
+    <ProfileSettings
+      user={{
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        phone: user.phone,
+        image: user.image,
+        role: user.role,
+        createdAt: user.createdAt.toISOString(),
+      }}
+    />
+  );
 }

@@ -1,3 +1,12 @@
-export default function Page() {
-  return <main className="mx-auto max-w-7xl px-5 py-16"><h1 className="text-3xl font-black">Панель</h1><p className="mt-3 text-gray-500">Страница подготовлена. Функциональность будет реализована следующим этапом.</p></main>;
+import { requireRole } from "@/lib/authorization";
+
+export default async function Page() {
+  await requireRole("MODERATOR");
+
+  return (
+    <main className="mx-auto max-w-7xl px-5 py-16">
+      <h1 className="text-3xl font-black">Панель модератора</h1>
+      <p className="mt-3 text-gray-500">Защищённый раздел. Интерфейс инструментов будет спроектирован отдельно.</p>
+    </main>
+  );
 }

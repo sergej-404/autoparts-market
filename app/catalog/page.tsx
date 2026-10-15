@@ -1,3 +1,26 @@
-export default function Page() {
-  return <main className="mx-auto max-w-7xl px-5 py-16"><h1 className="text-3xl font-black">Каталог</h1><p className="mt-3 text-gray-500">Страница подготовлена. Функциональность будет реализована следующим этапом.</p></main>;
+import CatalogClient from "./CatalogClient";
+
+type CatalogPageProps = {
+  searchParams: Promise<{
+    category?: string | string[];
+    brand?: string | string[];
+    q?: string | string[];
+    query?: string | string[];
+  }>;
+};
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+export default async function CatalogPage({ searchParams }: CatalogPageProps) {
+  const params = await searchParams;
+
+  return (
+    <CatalogClient
+      initialCategory={firstParam(params.category)}
+      initialBrand={firstParam(params.brand)}
+      initialQuery={firstParam(params.q ?? params.query)}
+    />
+  );
 }
