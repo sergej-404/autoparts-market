@@ -1,15 +1,30 @@
+
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/prisma";
 
 const secret = process.env.BETTER_AUTH_SECRET;
+
 if (process.env.NODE_ENV === "production" && !secret) {
   throw new Error("BETTER_AUTH_SECRET должен быть задан в production.");
 }
 
+const appUrl =
+  process.env.BETTER_AUTH_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://autoparts-market-six.vercel.app"
+    : "http://localhost:3000");
+
+const additionalTrustedOrigins = (
+  process.env.ADDITIONAL_TRUSTED_ORIGINS || ""
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 export const auth = betterAuth({
   appName: "AXION X",
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: appUrl,
   secret,
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   emailAndPassword: {
@@ -54,9 +69,6 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [
-    ...new Set([
-      process.env.BETTER_AUTH_URL || "http://localhost:3000",
-      ...(process.env.ADDITIONAL_TRUSTED_ORIGINS || "").split(",").map((origin) => origin.trim()).filter(Boolean),
-    ]),
+    ...new Set([appUrl, ...additionalTrustedOrigins]),
   ],
 });
