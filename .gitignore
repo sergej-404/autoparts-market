@@ -9,3 +9,6 @@ npm-debug.log*
 base.db
 
 tsconfig.tsbuildinfo
+
+update-github.ps1
+update-github.ps1.backup
