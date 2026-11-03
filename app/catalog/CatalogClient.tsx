@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ListingCard, type PublicListing } from "@/components/cards/ListingCard";
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -20,15 +21,10 @@ type Filters = {
   inStock: boolean;
   discount: boolean;
   rating: string;
+  category: string;
 };
 
-type ProductPlaceholder = {
-  id: number;
-  price: number;
-  rating: number;
-  inStock: boolean;
-  discount: boolean;
-};
+type ProductPlaceholder = PublicListing;
 
 const sortOptions = [
   { value: "popular", label: "По популярности", emoji: "⭐" },
@@ -38,45 +34,6 @@ const sortOptions = [
   { value: "newest", label: "Сначала новинки", emoji: "🆕" },
 ];
 
-// Temporary test directory. Remove these entries when the real vehicle directory is connected.
-const vehicleMakes: string[] = [
-  "Audi",
-  "BMW",
-  "Mercedes-Benz",
-  "Toyota",
-  "Volkswagen",
-];
-const vehicleModelsByMake: Record<string, string[]> = {
-  audi: ["A3", "A4", "A6", "Q3", "Q5"],
-  bmw: ["1 Series", "3 Series", "5 Series", "X3", "X5"],
-  "mercedes-benz": ["A-Class", "C-Class", "E-Class", "GLA", "GLC"],
-  toyota: ["Corolla", "Camry", "RAV4", "Yaris", "Land Cruiser"],
-  volkswagen: ["Golf", "Passat", "Tiguan", "Polo", "Touareg"],
-};
-
-// Temporary test records for exercising catalog filters. Remove when real products are connected.
-
-
-// Placeholder records only keep the catalog layout visible until real products are connected.
-const products: ProductPlaceholder[] = [
-  { id: 1, price: 89.9, rating: 4.8, inStock: true, discount: true },
-  { id: 2, price: 124.5, rating: 4.9, inStock: true, discount: false },
-  { id: 3, price: 42.9, rating: 4.6, inStock: true, discount: true },
-  { id: 4, price: 18.5, rating: 4.7, inStock: true, discount: false },
-  { id: 5, price: 156, rating: 4.5, inStock: true, discount: false },
-  { id: 6, price: 79.9, rating: 4.8, inStock: true, discount: true },
-  { id: 7, price: 64.9, rating: 4.7, inStock: true, discount: false },
-  { id: 8, price: 24.9, rating: 4.6, inStock: true, discount: true },
-  { id: 9, price: 35, rating: 4.3, inStock: false, discount: false },
-  { id: 10, price: 49.9, rating: 4.5, inStock: true, discount: false },
-  { id: 11, price: 92.5, rating: 4.2, inStock: true, discount: true },
-  { id: 12, price: 115, rating: 4.9, inStock: true, discount: false },
-  { id: 13, price: 12.5, rating: 3.8, inStock: false, discount: true },
-  { id: 14, price: 59.9, rating: 4.1, inStock: true, discount: false },
-  { id: 15, price: 210, rating: 4.7, inStock: false, discount: false },
-  { id: 16, price: 34.5, rating: 4.4, inStock: true, discount: true },
-  { id: 17, price: 149.9, rating: 5.0, inStock: true, discount: false },
-];
 
 
 type VehicleComboboxProps = {
@@ -178,46 +135,57 @@ const emptyFilters: Filters = {
   inStock: false,
   discount: false,
   rating: "0",
+  category: "",
 };
 
 export default function CatalogClient({
-  initialCategory: _initialCategory,
-  initialBrand: _initialBrand,
-  initialQuery: _initialQuery,
+  initialCategory,
+  initialBrand,
+  initialQuery,
+  listings,
+  makes,
+  categories,
 }: {
-  initialCategory: string;
-  initialBrand: string;
-  initialQuery: string;
+  initialCategory: string; initialBrand: string; initialQuery: string;
+  listings: ProductPlaceholder[];
+  makes: { id: string; name: string; models: { id: string; name: string; years: number[] }[] }[];
+  categories: { id: string; name: string }[];
 }) {
-  const [filters, setFilters] = useState<Filters>({ ...emptyFilters });
-  const [draft, setDraft] = useState<Filters>({ ...emptyFilters });
+  const [filters, setFilters] = useState<Filters>({ ...emptyFilters, category: initialCategory });
+  const [draft, setDraft] = useState<Filters>({ ...emptyFilters, category: initialCategory });
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [sort, setSort] = useState("popular");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [vehicleMake, setVehicleMake] = useState("");
-  const [selectedVehicleMake, setSelectedVehicleMake] = useState("");
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [vehicleMake, setVehicleMake] = useState(initialBrand);
+  const [selectedVehicleMake, setSelectedVehicleMake] = useState(initialBrand);
   const [vehicleModel, setVehicleModel] = useState("");
   const [selectedVehicleModel, setSelectedVehicleModel] = useState("");
   const [vehicleYear, setVehicleYear] = useState("");
+  const [appliedVehicle, setAppliedVehicle] = useState<{ make: string; model: string; year: string } | null>(null);
 
   const visibleProducts = useMemo(() => {
-    const result = products.filter((product) => {
-      if (filters.minPrice !== "" && product.price < Number(filters.minPrice)) return false;
-      if (filters.maxPrice !== "" && product.price > Number(filters.maxPrice)) return false;
-      if (filters.inStock && !product.inStock) return false;
-      if (filters.discount && !product.discount) return false;
-      if (filters.rating !== "0" && product.rating < Number(filters.rating)) return false;
+    const queryTokens = initialQuery.trim().replace(/\s+/g, " ").toLocaleLowerCase().split(" ").filter(Boolean);
+    const category = filters.category.trim().toLocaleLowerCase();
+    const brand = (appliedVehicle?.make || initialBrand).trim().toLocaleLowerCase();
+    const result = listings.filter((product) => {
+      if (category && product.category.name.toLocaleLowerCase() !== category) return false;
+      if (brand && product.make?.name.toLocaleLowerCase() !== brand) return false;
+      if (appliedVehicle?.model && product.model?.name !== appliedVehicle.model) return false;
+      if (appliedVehicle?.year && String(product.year ?? "") !== appliedVehicle.year) return false;
+      if (filters.inStock && (product.quantity <= 0 || product.status === "OUT_OF_STOCK")) return false;
+      if (filters.minPrice && product.price < Number(filters.minPrice)) return false;
+      if (filters.maxPrice && product.price > Number(filters.maxPrice)) return false;
+      const searchableText = `${product.id} ${product.title} ${product.description} ${product.category.name} ${product.make?.name ?? ""} ${product.model?.name ?? ""}`.toLocaleLowerCase();
+      if (queryTokens.some((token) => !searchableText.includes(token))) return false;
       return true;
     });
-    switch (sort) {
-      case "price-asc": return result.sort((a, b) => a.price - b.price);
-      case "price-desc": return result.sort((a, b) => b.price - a.price);
-      case "rating": return result.sort((a, b) => b.rating - a.rating);
-      case "newest": return result.sort((a, b) => b.id - a.id);
-      default: return result.sort((a, b) => b.rating - a.rating || a.id - b.id);
-    }
-  }, [filters, sort]);
+    if (sort === "price-asc") return result.sort((a, b) => a.price - b.price);
+    if (sort === "price-desc") return result.sort((a, b) => b.price - a.price);
+    if (sort === "newest") return result;
+    return result;
+  }, [listings, initialQuery, filters.category, filters.inStock, filters.minPrice, filters.maxPrice, initialBrand, appliedVehicle, sort]);
 
   const resetFilters = () => {
     setFilters({ ...emptyFilters });
@@ -239,20 +207,21 @@ export default function CatalogClient({
     filters.inStock ? "В наличии" : "",
     filters.discount ? "Со скидкой" : "",
     filters.rating !== "0" ? `Рейтинг ${filters.rating}+` : "",
-    filters.minPrice ? `от €${filters.minPrice}` : "",
-    filters.maxPrice ? `до €${filters.maxPrice}` : "",
+    filters.minPrice ? `от ${filters.minPrice} RUB` : "",
+    filters.maxPrice ? `до ${filters.maxPrice} RUB` : "",
   ].filter(Boolean);
 
   const filterContents = (state: Filters, setState: (value: Filters) => void, mobile = false) => {
     const setValue = <K extends keyof Filters>(key: K, value: Filters[K]) => setState({ ...state, [key]: value });
     return (
       <>
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
+        {!mobile && <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
           <h2 className="text-base font-extrabold">Фильтры</h2>
           <button type="button" onClick={() => setState({ ...emptyFilters })} className="text-xs font-semibold text-[var(--muted)] transition hover:text-[var(--accent)]">Сбросить всё</button>
-        </div>
+        </div>}
+        {categories.length > 0 && <div className="border-b border-[var(--line)] py-4"><h3 className="mb-3 text-sm font-bold">Категории</h3><div className="space-y-3">{(showAllCategories ? categories : categories.slice(0, 10)).map((category) => <label key={category.id} className="flex cursor-pointer items-center gap-2.5 text-sm"><input type="checkbox" checked={state.category === category.name} onChange={(event) => setValue("category", event.target.checked ? category.name : "")} className="h-4 w-4 accent-[var(--accent)]" />{category.name}</label>)}</div>{categories.length > 10 && <button type="button" onClick={() => setShowAllCategories((value) => !value)} className="mt-3 text-xs font-bold text-[var(--accent)] hover:underline">{showAllCategories ? "Скрыть" : "Показать ещё"}</button>}</div>}
         <div className="border-b border-[var(--line)] py-4">
-          <h3 className="mb-3 text-sm font-bold">Цена, €</h3>
+          <h3 className="mb-3 text-sm font-bold">Цена, RUB</h3>
           <div className="grid grid-cols-2 gap-2">
             <input aria-label="Минимальная цена" type="number" min="0" value={state.minPrice} onChange={(e) => setValue("minPrice", e.target.value)} placeholder="От" className="h-10 min-w-0 rounded-lg border border-[var(--line)] bg-black/10 px-3 text-sm outline-none focus:border-[var(--accent)]" />
             <input aria-label="Максимальная цена" type="number" min="0" value={state.maxPrice} onChange={(e) => setValue("maxPrice", e.target.value)} placeholder="До" className="h-10 min-w-0 rounded-lg border border-[var(--line)] bg-black/10 px-3 text-sm outline-none focus:border-[var(--accent)]" />
@@ -301,7 +270,7 @@ export default function CatalogClient({
               label="Марка"
               value={vehicleMake}
               placeholder="Введите или найдите марку"
-              options={vehicleMakes}
+              options={makes.map((make) => make.name)}
               onChange={(value) => {
                 setVehicleMake(value);
                 setSelectedVehicleMake("");
@@ -324,7 +293,7 @@ export default function CatalogClient({
                 label="Модель"
                 value={vehicleModel}
                 placeholder="Введите или найдите модель"
-                options={vehicleModelsByMake[selectedVehicleMake.trim().toLocaleLowerCase()] ?? []}
+                options={makes.find((make) => make.name.toLocaleLowerCase() === selectedVehicleMake.trim().toLocaleLowerCase())?.models.map((model) => model.name) ?? []}
                 onChange={(value) => {
                   setVehicleModel(value);
                   setSelectedVehicleModel("");
@@ -344,7 +313,7 @@ export default function CatalogClient({
                 label="Год выпуска"
                 value={vehicleYear}
                 placeholder="Выберите год"
-                options={Array.from({ length: 27 }, (_, index) => String(2026 - index))}
+                options={makes.find((make) => make.name.toLocaleLowerCase() === selectedVehicleMake.trim().toLocaleLowerCase())?.models.find((model) => model.name === selectedVehicleModel)?.years.map(String) ?? []}
                 searchable={false}
                 listMaxHeight="ten-rows"
                 onChange={() => setVehicleYear("")}
@@ -352,7 +321,7 @@ export default function CatalogClient({
               />
             </div>
           )}
-          <button type="button" disabled={!selectedVehicleMake || !selectedVehicleModel || vehicleYear.length !== 4} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-extrabold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"><span>Подобрать</span></button>
+          <button type="button" onClick={() => setAppliedVehicle({ make: selectedVehicleMake, model: selectedVehicleModel, year: vehicleYear })} disabled={!selectedVehicleMake || !selectedVehicleModel || vehicleYear.length !== 4} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 text-sm font-extrabold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"><span>Подобрать</span></button>
         </div>
       </section>
 
@@ -362,7 +331,7 @@ export default function CatalogClient({
         <section aria-label="Товары каталога" className="min-w-0">
           <div className="relative z-20 mb-4">
             <div className="flex min-h-11 flex-wrap items-center gap-1.5 sm:gap-3">
-              <button type="button" onClick={() => { if (window.matchMedia("(min-width: 1024px)").matches) document.querySelector("[aria-label=\"Фильтры каталога\"]")?.scrollIntoView({ behavior: "smooth", block: "start" }); else openMobileFilters(); }} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-bold transition hover:border-[var(--accent)]" aria-label="Открыть фильтры" title="Фильтры"><SlidersHorizontal size={17} className="text-[var(--accent)]" /><span className="hidden lg:inline">Фильтры</span></button>
+              <button type="button" onClick={openMobileFilters} className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-bold transition hover:border-[var(--accent)] lg:hidden" aria-label="Открыть фильтры" title="Фильтры"><SlidersHorizontal size={17} className="text-[var(--accent)]" /><span>Фильтры</span></button>
               <div className="relative shrink-0">
                 <button type="button" onClick={() => setSortOpen((open) => !open)} aria-expanded={sortOpen} aria-label="Сортировка" title="Сортировка" className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 text-sm font-bold transition hover:border-[var(--accent)]"><ArrowDownWideNarrow size={17} className="text-[var(--accent)]" /><span className="hidden lg:inline">Сортировка</span><ChevronDown size={14} className={`text-[var(--muted)] transition ${sortOpen ? "rotate-180" : ""}`} /></button>
                 {sortOpen && <><button type="button" aria-label="Закрыть меню сортировки" className="fixed inset-0 z-30 cursor-default" onClick={() => setSortOpen(false)} /><div className="absolute left-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-[var(--line)] bg-[#11171c] p-1.5 shadow-2xl shadow-black/40">{sortOptions.map((option) => <button key={option.value} type="button" onClick={() => { setSort(option.value); setSortOpen(false); }} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition ${sort === option.value ? "bg-[var(--accent)]/10 font-bold text-[var(--accent)]" : "hover:bg-white/5"}`}><span>{option.emoji}</span><span className="flex-1">{option.label}</span>{sort === option.value && <Check size={15} />}</button>)}</div></>}
@@ -375,13 +344,13 @@ export default function CatalogClient({
             <p aria-live="polite" className="mt-4 text-left text-xs text-[var(--muted)] sm:text-sm">Найдено: <strong className="text-[var(--foreground)]">{countLabel}</strong></p>
           </div>
 
-          {activeFilters.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2">{activeFilters.map((filter) => <span key={filter} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--muted)]">{filter}<button type="button" onClick={() => setFilters({ ...filters, inStock: filter === "В наличии" ? false : filters.inStock, discount: filter === "Со скидкой" ? false : filters.discount, rating: filter.startsWith("Рейтинг") ? "0" : filters.rating, minPrice: filter.startsWith("от €") ? "" : filters.minPrice, maxPrice: filter.startsWith("до €") ? "" : filters.maxPrice })} aria-label={`Убрать фильтр ${filter}`} className="hover:text-[var(--accent)]"><X size={12} /></button></span>)}<button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)]"><RotateCcw size={12} />Сбросить</button></div>}
+          {activeFilters.length > 0 && <div className="mb-4 flex flex-wrap items-center gap-2">{activeFilters.map((filter) => <span key={filter} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-xs text-[var(--muted)]">{filter}<button type="button" onClick={() => setFilters({ ...filters, inStock: filter === "В наличии" ? false : filters.inStock, discount: filter === "Со скидкой" ? false : filters.discount, rating: filter.startsWith("Рейтинг") ? "0" : filters.rating, minPrice: filter.startsWith("от ") ? "" : filters.minPrice, maxPrice: filter.startsWith("до ") ? "" : filters.maxPrice })} aria-label={`Убрать фильтр ${filter}`} className="hover:text-[var(--accent)]"><X size={12} /></button></span>)}<button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)]"><RotateCcw size={12} />Сбросить</button></div>}
 
-          {visibleProducts.length ? <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3" : "flex flex-col gap-3"}>{visibleProducts.map((product) => <div key={product.id} aria-label="Пустая карточка товара" className={`rounded-xl border border-[var(--line)] bg-[var(--surface)] transition-colors hover:border-[var(--accent)]/40 ${view === "grid" ? "aspect-[4/5] min-h-36" : "h-28 w-full sm:h-36"}`} />)}</div> : <div className="rounded-2xl border border-dashed border-[var(--line)] px-5 py-16 text-center"><Filter size={28} className="mx-auto text-[var(--muted)]" /><h2 className="mt-4 text-lg font-bold">Ничего не найдено</h2><p className="mt-2 text-sm text-[var(--muted)]">Попробуйте изменить параметры фильтрации.</p><button type="button" onClick={resetFilters} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white hover:bg-[var(--accent-hover)]"><RotateCcw size={15} />Сбросить фильтры</button></div>}
+          {visibleProducts.length ? <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3" : "flex flex-col gap-3"}>{visibleProducts.map((listing) => <ListingCard key={listing.id} listing={listing} view={view} />)}</div> : <div className="rounded-2xl border border-dashed border-[var(--line)] px-5 py-16 text-center"><Filter size={28} className="mx-auto text-[var(--muted)]" /><h2 className="mt-4 text-lg font-bold">Ничего не найдено</h2><p className="mt-2 text-sm text-[var(--muted)]">Попробуйте изменить параметры фильтрации.</p><button type="button" onClick={resetFilters} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white hover:bg-[var(--accent-hover)]"><RotateCcw size={15} />Сбросить фильтры</button></div>}
         </section>
       </div>
 
-      {filterOpen && <div className="fixed inset-0 z-[70] lg:hidden"><button type="button" aria-label="Закрыть фильтры" onClick={() => setFilterOpen(false)} className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" /><aside aria-label="Мобильные фильтры" className="absolute inset-y-0 left-0 flex w-[min(88vw,380px)] flex-col border-r border-[var(--line)] bg-[var(--background)] shadow-2xl"><div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-4"><span className="text-lg font-black">Фильтры</span><button type="button" onClick={() => setFilterOpen(false)} aria-label="Закрыть фильтры" className="rounded-lg p-2 hover:bg-white/10"><X size={20} /></button></div><div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-1">{filterContents(draft, setDraft, true)}</div></aside></div>}
+      {filterOpen && <div className="fixed inset-0 z-[70] lg:hidden"><button type="button" aria-label="Закрыть фильтры" onClick={() => setFilterOpen(false)} className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" /><aside aria-label="Мобильные фильтры" className="absolute inset-y-0 left-0 flex w-[min(88vw,380px)] flex-col border-r border-[var(--line)] bg-[var(--background)] shadow-2xl"><div className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-4"><span className="text-lg font-black">Фильтры</span><button type="button" onClick={() => setDraft({ ...emptyFilters })} className="ml-auto text-xs font-semibold text-[var(--muted)] hover:text-[var(--accent)]">Сбросить все</button><button type="button" onClick={() => setFilterOpen(false)} aria-label="Закрыть фильтры" className="rounded-lg p-2 hover:bg-white/10"><X size={20} /></button></div><div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-1">{filterContents(draft, setDraft, true)}</div></aside></div>}
     </main>
   );
 }

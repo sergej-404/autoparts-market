@@ -10,6 +10,7 @@ datasource db {
 model User {
   id            String    @id
   name          String
+  publicId      String    @unique @default(dbgenerated("('us-'::text || lpad((floor(random() * 1000000))::text, 6, '0'::text))"))
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
@@ -19,6 +20,14 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  orders        Order[]
+  sentNotifications Notification[] @relation("NotificationSender")
+  receivedNotifications Notification[] @relation("NotificationRecipient")
+  notificationPreference NotificationPreference?
+  pushSubscriptions PushSubscription[]
+  conversationsAsBuyer ChatConversation[] @relation("ChatBuyer")
+  conversationsAsSeller ChatConversation[] @relation("ChatSeller")
+  chatMessages ChatMessage[]
 
   @@map("user")
 }
@@ -68,4 +77,286 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+
+model CarMake {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  models    CarModel[]
+  listings  Listing[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("car_make")
+}
+
+model CarModel {
+  id        String   @id @default(cuid())
+  name      String
+  makeId    String
+  make      CarMake  @relation(fields: [makeId], references: [id], onDelete: Cascade)
+  years     Int[]
+  listings  Listing[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([makeId, name])
+  @@index([makeId])
+  @@map("car_model")
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  emoji     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listings  Listing[]
+
+  @@map("product_category")
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  OUT_OF_STOCK
+}
+
+model Listing {
+  id          String          @id @default(cuid())
+  title       String
+  description String          @db.Text
+  images      String[]
+  compatibility Json @default("[]")
+  makeId      String?
+  make        CarMake?        @relation(fields: [makeId], references: [id], onDelete: SetNull)
+  modelId     String?
+  model       CarModel?       @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  year        Int?
+  price       Int             @default(0)
+  quantity    Int             @default(0)
+  categoryId  String
+  category    ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  status      ListingStatus   @default(DRAFT)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  favoriteEvents ListingFavoriteEvent[]
+  chatConversations ChatConversation[]
+
+  @@index([status, createdAt])
+  @@index([categoryId])
+  @@map("listing")
+}
+
+
+model ListingFavoriteEvent {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([listingId, createdAt])
+  @@map("listing_favorite_event")
+}
+
+
+enum OrderStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderFulfillment {
+  PICKUP
+  OWN_PLACE
+}
+
+model Order {
+  id              String           @id @default(cuid())
+  orderCode       String           @unique
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerName    String
+  phone           String
+  fulfillment     OrderFulfillment
+  meetingPlace    String?
+  pickupAddress   String?
+  status          OrderStatus      @default(PENDING)
+  total           Int
+  items           OrderItem[]
+  messages        OrderMessage[]
+  hiddenThreads   OrderThreadHidden[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("order")
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listingId      String
+  title          String
+  quantity       Int
+  unitPrice      Int
+  lineTotal      Int
+
+  @@index([orderId])
+  @@map("order_item")
+}
+
+model OrderMessage {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  senderId   String
+  senderName String
+  senderRole String
+  photos     Json     @default("[]")
+  recipientId String
+  text       String   @db.VarChar(2000)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([recipientId, readAt])
+  @@map("order_message")
+}
+
+
+enum NotificationType {
+  SYSTEM
+  PERSONAL
+  GENERAL
+}
+
+model NotificationPreference {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site      Boolean  @default(true)
+  orders    Boolean  @default(true)
+  messages  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preference")
+}
+
+
+model PushSubscription {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint       String   @unique @db.Text
+  p256dh         String   @db.VarChar(200)
+  auth           String   @db.VarChar(100)
+  expirationTime DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+  @@map("push_subscription")
+}
+
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  fromUserId  String?
+  fromUser    User?            @relation("NotificationSender", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId    String
+  toUser      User             @relation("NotificationRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+  title       String?
+  text        String           @db.Text
+  readAt      DateTime?
+  batchId     String?
+  eventKey    String?          @unique
+  createdAt   DateTime         @default(now())
+
+  @@index([toUserId, readAt, createdAt])
+  @@index([type, createdAt])
+  @@map("notification")
+}
+
+
+model ChatConversation {
+  id        String   @id @default(cuid())
+  buyerId   String
+  buyer     User     @relation("ChatBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    User     @relation("ChatSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  buyerDeletedAt DateTime?
+  sellerDeletedAt DateTime?
+  messages  ChatMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([buyerId, updatedAt])
+  @@index([sellerId, updatedAt])
+  @@map("chat_conversation")
+}
+
+model ChatMessage {
+  id             String @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String @default("") @db.VarChar(2000)
+  photos         Json   @default("[]")
+  readAt         DateTime?
+  createdAt      DateTime @default(now())
+  @@index([conversationId, createdAt])
+  @@index([senderId, readAt])
+  @@map("chat_message")
+}
+
+model OrderThreadHidden {
+  orderId String
+  userId String
+  hiddenAt DateTime @default(now())
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, userId])
+  @@index([userId])
+  @@map("order_thread_hidden")
+}
+
+model ModerationReport {
+  id String @id @default(cuid())
+  kind String
+  targetId String
+  reason String @db.VarChar(120)
+  details String @db.VarChar(2000)
+  reporterId String
+  createdAt DateTime @default(now())
+  @@index([kind, createdAt])
+  @@index([targetId])
+  @@map("moderation_report")
+}
+
+model ModerationComment {
+  id String @id @default(cuid())
+  listingId String
+  authorId String
+  text String @db.VarChar(2000)
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([listingId])
+  @@map("moderation_comment")
+}
+
+model ListingViewEvent {
+  id String @id @default(cuid())
+  listingId String
+  createdAt DateTime @default(now())
+  @@index([listingId, createdAt])
+  @@map("listing_view_event")
 }

@@ -12,3 +12,8 @@ tsconfig.tsbuildinfo
 
 update-github.ps1
 update-github.ps1.backup
+
+# Generated/user-provided assets; keep repository clean
+public/uploads/*
+!public/uploads/.gitkeep
+*.zip

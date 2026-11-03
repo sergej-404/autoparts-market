@@ -1,7 +1,10 @@
 
+import { randomInt } from "node:crypto";
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/prisma";
+import { normalizeRussianPhone } from "@/lib/phone";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 
@@ -33,6 +36,31 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
     autoSignIn: true,
   },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          const rawPhone = typeof user.phone === "string" ? user.phone : "";
+          const phone = normalizeRussianPhone(rawPhone);
+          if (!phone) {
+            throw new APIError("BAD_REQUEST", { message: "Введите телефон в формате +7 (XXX) XXX-XX-XX." });
+          }
+          const existingPhones = await prisma.user.findMany({ where: { phone: { not: null } }, select: { phone: true } });
+          if (existingPhones.some((entry) => entry.phone && normalizeRussianPhone(entry.phone) === phone)) {
+            throw new APIError("BAD_REQUEST", { message: "Этот номер телефона уже используется другим аккаунтом." });
+          }
+          let publicId = "";
+          for (let attempt = 0; attempt < 20; attempt++) {
+            const candidate = `us-${Array.from({ length: 6 }, () => randomInt(10)).join("")}`;
+            const exists = await prisma.user.findUnique({ where: { publicId: candidate }, select: { id: true } });
+            if (!exists) { publicId = candidate; break; }
+          }
+          if (!publicId) throw new APIError("SERVICE_UNAVAILABLE", { message: "Не удалось создать публичный ID. Повторите попытку." });
+          return { data: { ...user, phone, publicId } };
+        },
+      },
+    },
+  },
   user: {
     additionalFields: {
       phone: {
@@ -55,8 +83,6 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 60, max: 3 },
-      "/forget-password": { window: 60, max: 3 },
-      "/reset-password": { window: 60, max: 5 },
     },
   },
   advanced: {

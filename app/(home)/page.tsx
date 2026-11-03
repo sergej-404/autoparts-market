@@ -1,12 +1,39 @@
-import { ArrowRight, ChevronRight, Disc3, Lightbulb, Settings2, Wrench } from "lucide-react";
+import { CategoryIcon } from "@/components/categories/CategoryIcon";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { ProductCard } from "@/components/cards/ProductCard";
-import { categories, featuredProducts, bestSellingProducts, carBrands } from "./data/home";
+import { ListingCard } from "@/components/cards/ListingCard";
+import { HomeListingCarousel } from "@/components/home/HomeListingCarousel";
+import { prisma } from "@/lib/prisma";
 
-const categoryIcons = [Settings2, Disc3, Lightbulb, Wrench];
+const categoryFallbackEmojis = ["🔧", "⚙️", "🛞", "🚗", "🔋", "💡", "🛠️", "🔩"];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [categories, listings, carMakes, favoriteCounts] = await Promise.all([
+    prisma.productCategory.findMany({ orderBy: { name: "asc" } }),
+    prisma.listing.findMany({ where: { status: { in: ["PUBLISHED", "OUT_OF_STOCK"] } }, include: { make: true, model: true, category: true }, orderBy: { createdAt: "desc" } }),
+    prisma.carMake.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
+    prisma.listingFavoriteEvent.groupBy({ by: ["listingId"], _count: { listingId: true }, orderBy: { _count: { listingId: "desc" } } }),
+  ]);
+  const favoriteCountByListing = new Map(favoriteCounts.map((item) => [item.listingId, item._count.listingId]));
+  const listingsByFavoriteCount = [...listings].sort((a, b) => {
+    const favoriteDifference = (favoriteCountByListing.get(b.id) ?? 0) - (favoriteCountByListing.get(a.id) ?? 0);
+    return favoriteDifference || b.createdAt.getTime() - a.createdAt.getTime();
+  });
+  const popularListings = listingsByFavoriteCount.filter((listing) => (favoriteCountByListing.get(listing.id) ?? 0) > 0).slice(0, 12);
+  if (popularListings.length < 2) {
+    for (const listing of listingsByFavoriteCount) {
+      if (popularListings.length >= 12) break;
+      if (!popularListings.some((item) => item.id === listing.id)) popularListings.push(listing);
+    }
+  } else if (popularListings.length < 12) {
+    for (const listing of listingsByFavoriteCount) {
+      if (popularListings.length >= 12) break;
+      if (!popularListings.some((item) => item.id === listing.id)) popularListings.push(listing);
+    }
+  }
+  // This project has no order/checkout records yet, so sales hits cannot be ranked without inventing sales data.
+  const hitListings: typeof listings = [];
   return (
     <main className="pb-12">
       <section className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">
@@ -33,13 +60,15 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <SectionHeading eyebrow="Подбор по разделам" title="Категории запчастей" actionLabel="Весь каталог" />
-        <div className="mt-6 grid auto-cols-[calc(50%-6px)] grid-flow-col grid-rows-2 gap-3 overflow-x-auto pb-3 sm:auto-cols-[calc(33.333%-8px)] lg:auto-cols-[calc(25%-9px)]">
+        <div className="mt-6 grid grid-flow-col grid-rows-2 auto-cols-[calc((100%-12px)/2)] gap-3 overflow-x-auto pb-3 lg:auto-cols-[calc((100%-48px)/5)]">
           {categories.map((category, index) => {
-            const Icon = categoryIcons[index % categoryIcons.length];
+            const emoji = category.emoji || categoryFallbackEmojis[index % categoryFallbackEmojis.length];
             return (
-              <Link key={category.title} href={`/catalog?category=${encodeURIComponent(category.title)}`} className="group flex min-h-24 flex-col justify-between rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent)]/70">
-                <Icon size={22} className="text-[var(--accent)]" />
-                <span className="mt-4 flex items-center justify-between gap-2 text-sm font-semibold">{category.title}<ChevronRight size={15} className="shrink-0 text-[var(--muted)] transition group-hover:translate-x-0.5" /></span>
+              <Link key={category.name} href={`/catalog?category=${encodeURIComponent(category.name)}`} className="group flex min-w-0 items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] px-2 py-2.5 transition hover:border-[var(--accent)]/70 sm:gap-3 sm:px-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg sm:h-14 sm:w-14 [&_img]:block [&_img]:!h-full [&_img]:!w-full [&_img]:object-contain [&_span]:flex [&_span]:h-full [&_span]:w-full [&_span]:items-center [&_span]:justify-center" aria-hidden="true">
+                  <CategoryIcon value={emoji} size={56} />
+                </span>
+                <span className="min-w-0 flex-1 text-left text-xs font-semibold leading-snug sm:text-sm break-words">{category.name}</span>
               </Link>
             );
           })}
@@ -49,9 +78,7 @@ export default function HomePage() {
       <section className="border-y border-[var(--line)] bg-[var(--surface)]">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
           <SectionHeading eyebrow="Выбор покупателей" title="Популярные товары" actionLabel="Смотреть каталог" />
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-2">
-            {featuredProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-          </div>
+          <HomeListingCarousel listings={popularListings} label="Популярные товары" />
         </div>
       </section>
 
@@ -80,7 +107,7 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-4 pb-2 pt-2 sm:px-6 lg:px-8 lg:pb-4">
         <SectionHeading eyebrow="Подбор по автомобилю" title="Марки автомобилей" actionLabel="Все марки" />
         <div className="mt-6 flex gap-3 overflow-x-auto pb-3">
-          {carBrands.map((brand) => (
+          {carMakes.map(({ name: brand }) => (
             <Link key={brand} href={`/catalog?brand=${encodeURIComponent(brand)}`} className="flex min-w-32 shrink-0 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--surface)] px-5 py-5 text-sm font-extrabold tracking-wide transition hover:border-[var(--accent)]/70 sm:min-w-40">
               {brand}
             </Link>
@@ -90,9 +117,7 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <SectionHeading eyebrow="Чаще всего выбирают" title="Хиты продаж" actionLabel="Весь каталог" />
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-2">
-          {bestSellingProducts.map((product) => <ProductCard key={product.id} product={product} />)}
-        </div>
+        <div className="mt-6">{hitListings.length > 0 ? <HomeListingCarousel listings={hitListings} label="Хиты продаж" /> : <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-8 text-sm text-[var(--muted)]">Пока нет завершённых оплаченных заказов для формирования списка хитов продаж.</p>}</div>
       </section>
     </main>
   );

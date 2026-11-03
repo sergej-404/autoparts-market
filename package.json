@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "security:check": "npm run type-check"
+    "security:check": "npm run type-check",
+    "postinstall": "prisma generate",
+    "push:keys": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.7.7",

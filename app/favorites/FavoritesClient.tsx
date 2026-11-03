@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ListingCard, type PublicListing } from "@/components/cards/ListingCard";
 import Link from "next/link";
+import { authClient } from "@/lib/auth-client";
 import {
   ArrowDownWideNarrow,
   Check,
@@ -9,12 +11,6 @@ import {
   LayoutGrid,
   List as ListIcon,
 } from "lucide-react";
-
-type FavoritePlaceholder = {
-  id: number;
-  price: number;
-  addedOrder: number;
-};
 
 type SortOption = {
   value: "newest" | "price-asc" | "price-desc";
@@ -28,23 +24,26 @@ const sortOptions: SortOption[] = [
   { value: "price-desc", label: "Сначала дороже", emoji: "💰" },
 ];
 
-// Пустые тестовые карточки: цены и порядок нужны только для проверки сортировки.
-const favoritePlaceholders: FavoritePlaceholder[] = [
-  { id: 1, price: 89.9, addedOrder: 1 },
-  { id: 2, price: 124.5, addedOrder: 2 },
-  { id: 3, price: 42.9, addedOrder: 3 },
-  { id: 4, price: 18.5, addedOrder: 4 },
-  { id: 5, price: 156, addedOrder: 5 },
-  { id: 6, price: 79.9, addedOrder: 6 },
-];
-
-export default function FavoritesClient() {
+export default function FavoritesClient({ listings }: { listings: PublicListing[] }) {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const storageScope = sessionPending ? null : (session?.user?.id ?? "guest");
+  const cartKey = storageScope === null ? null : `axion_cart:${storageScope}`;
+  const favoritesKey = storageScope === null ? null : `axion_favorites:${storageScope}`;
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!favoritesKey) return;
+    const readFavorites = () => { try { setFavoriteIds(JSON.parse(window.localStorage.getItem(favoritesKey) || "[]") as string[]); } catch { setFavoriteIds([]); } };
+    readFavorites();
+    window.addEventListener("axion:favorites-updated", readFavorites);
+    window.addEventListener("storage", readFavorites);
+    return () => { window.removeEventListener("axion:favorites-updated", readFavorites); window.removeEventListener("storage", readFavorites); };
+  }, [favoritesKey]);
   const [sort, setSort] = useState<SortOption["value"]>("newest");
   const [sortOpen, setSortOpen] = useState(false);
   const [view, setView] = useState<"grid" | "list">("grid");
 
   const visibleFavorites = useMemo(() => {
-    const result = [...favoritePlaceholders];
+    const result = listings.filter((listing) => Boolean(favoritesKey) && favoriteIds.includes(listing.id));
     switch (sort) {
       case "price-asc":
         return result.sort((a, b) => a.price - b.price);
@@ -52,9 +51,9 @@ export default function FavoritesClient() {
         return result.sort((a, b) => b.price - a.price);
       case "newest":
       default:
-        return result.sort((a, b) => b.addedOrder - a.addedOrder);
+        return result;
     }
-  }, [sort]);
+  }, [sort, listings, favoriteIds, favoritesKey]);
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8 lg:pt-9">
@@ -153,15 +152,9 @@ export default function FavoritesClient() {
           </p>
         </div>
 
-        <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3" : "flex flex-col gap-3"}>
-          {visibleFavorites.map((favorite) => (
-            <div
-              key={favorite.id}
-              aria-label="Пустая карточка избранного товара"
-              className={`rounded-xl border border-[var(--line)] bg-[var(--surface)] transition-colors hover:border-[var(--accent)]/40 ${view === "grid" ? "aspect-[4/5] min-h-36" : "h-28 w-full sm:h-36"}`}
-            />
-          ))}
-        </div>
+        {visibleFavorites.length ? <div className={view === "grid" ? "grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3" : "flex flex-col gap-3"}>
+          {visibleFavorites.map((listing) => <ListingCard key={listing.id} listing={listing} view={view} />)}
+        </div> : <div className="rounded-2xl border border-dashed border-[var(--line)] py-12 text-center text-sm text-[var(--muted)]">В избранном пока нет товаров.</div>}
       </section>
     </main>
   );

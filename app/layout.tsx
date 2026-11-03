@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   },
   description: siteDescription,
   applicationName: projectVersion,
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "AXION X", statusBarStyle: "black-translucent" },
   icons: {
     icon: [{ url: "/brand/Graphics.png", type: "image/png", sizes: "1254x1254" }],
     shortcut: [{ url: "/brand/Graphics.png", type: "image/png" }],

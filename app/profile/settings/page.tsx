@@ -1,3 +1,4 @@
+import {RecentlyViewed} from "@/components/history/RecentlyViewed";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -25,8 +26,22 @@ export default async function ProfileSettingsPage() {
 
   if (!user) redirect("/login");
 
+  const [totalListings, publishedListings, favoritesReceived, notificationPreferences] = await Promise.all([
+    prisma.listing.count({ where: { createdById: user.id } }),
+    prisma.listing.count({ where: { createdById: user.id, status: "PUBLISHED" } }),
+    prisma.listingFavoriteEvent.count({ where: { listing: { createdById: user.id } } }),
+    prisma.notificationPreference.findUnique({
+      where: { userId: user.id },
+      select: { site: true, orders: true, messages: true },
+    }),
+  ]);
+
+  const recentListings = await prisma.listing.findMany({where:{status:{in:["PUBLISHED","OUT_OF_STOCK"]}},include:{make:true,model:true,category:true},orderBy:{createdAt:"desc"}});
   return (
+    <>
     <ProfileSettings
+      stats={{ totalListings, publishedListings, favoritesReceived }}
+      notificationPreferences={notificationPreferences ?? { site: true, orders: true, messages: true }}
       user={{
         id: user.id,
         name: user.name,
@@ -38,5 +53,7 @@ export default async function ProfileSettingsPage() {
         createdAt: user.createdAt.toISOString(),
       }}
     />
+    <RecentlyViewed listings={recentListings}/>
+    </>
   );
 }
