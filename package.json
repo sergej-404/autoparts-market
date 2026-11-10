@@ -1,0 +1,45 @@
+{
+  "name": "axion-x",
+  "version": "6.8.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "security:check": "npm run type-check",
+    "postinstall": "prisma generate",
+    "push:keys": "node scripts/generate-vapid-keys.mjs"
+  },
+  "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.7",
+    "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^2.8.2",
+    "better-auth": "^1.4.7",
+    "lucide-react": "^0.468.0",
+    "next": "^16.4.5",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.9",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "^16.4.5",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^4.1.9",
+    "typescript": "^5"
+  },
+  "overrides": {
+  "@prisma/config": {
+    "deepmerge-ts": "8.0.2"
+  },
+  "@vercel/oidc": {
+    "@vercel/cli-config": "0.3.7"
+  }
+}
+}

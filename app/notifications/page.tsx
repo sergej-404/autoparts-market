@@ -1,0 +1,41 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Bell, Megaphone, MonitorCog, UserRound, X } from "lucide-react";
+
+type Notification = { id: string; type: "SYSTEM" | "PERSONAL" | "GENERAL"; title: string | null; text: string; readAt: string | null; createdAt: string; fromUser: { name: string; role: string } | null };
+const typeLabel = (type: Notification["type"]) => type === "SYSTEM" ? "Системное" : type === "PERSONAL" ? "Личное" : "Общее";
+const senderLabel = (item: Notification) => item.type === "SYSTEM" && !item.fromUser ? "Система" : item.fromUser ? `${item.fromUser.name}${item.fromUser.role === "MODERATOR" ? " · модератор" : item.fromUser.role === "ADMIN" ? " · администратор" : ""}` : "Система";
+export default function Page() {
+  const [items, setItems] = useState<Notification[]>([]); const [selectedId, setSelectedId] = useState<string | null>(null); const [mobileItem, setMobileItem] = useState<Notification | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const load = useCallback(async () => { const response = await fetch("/api/notifications", { cache: "no-store" }); const result = await response.json() as { notifications?: Notification[]; error?: string }; if (!response.ok) throw new Error(result.error || "Не удалось загрузить уведомления."); setItems(result.notifications ?? []); }, []);
+  useEffect(() => { let active = true; const refresh = () => load().catch((e: unknown) => { if (active) setError(e instanceof Error ? e.message : "Ошибка загрузки."); }).finally(() => { if (active) setLoading(false); }); void refresh(); const timer = window.setInterval(refresh, 30000); return () => { active = false; window.clearInterval(timer); }; }, [load]);
+  const openItem = async (item: Notification, mobile: boolean) => {
+    setSelectedId(item.id);
+    if (mobile) setMobileItem(item);
+    if (item.readAt) return;
+
+    const readAt = new Date().toISOString();
+    setItems((current) => current.map((notification) => notification.id === item.id ? { ...notification, readAt } : notification));
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Не удалось отметить уведомление прочитанным.");
+      window.dispatchEvent(new Event("axion:notifications-updated"));
+    } catch (error) {
+      setItems((current) => current.map((notification) => notification.id === item.id ? { ...notification, readAt: null } : notification));
+      setError(error instanceof Error ? error.message : "Не удалось обновить уведомление.");
+    }
+  };
+  const selected = items.find((item) => item.id === selectedId) ?? null;
+  const renderIcon = (type: Notification["type"]) => type === "SYSTEM" ? <MonitorCog size={16}/> : type === "PERSONAL" ? <UserRound size={16}/> : <Megaphone size={16}/>;
+  const preview = (text: string) => text.length > 180 ? `${text.slice(0, 177).trimEnd()}…` : text;
+  return <main className="mx-auto max-w-7xl px-4 py-8 pb-24 text-[var(--foreground)] sm:px-6 lg:px-8"><header className="mb-6"><div className="flex items-center gap-3"><div className="rounded-xl bg-[var(--accent)]/15 p-3 text-[var(--accent)]"><Bell size={24}/></div><div><h1 className="text-3xl font-black">Уведомления</h1><p className="mt-1 text-sm text-[var(--muted)]">Системные сообщения, личные ответы и объявления сайта.</p></div></div></header>
+    {loading ? <p className="rounded-xl border border-[var(--line)] p-5 text-sm text-[var(--muted)]">Загрузка уведомлений…</p> : error ? <p role="alert" className="rounded-xl border border-red-500/40 p-4 text-sm text-red-400">{error}</p> : items.length === 0 ? <div className="rounded-2xl border border-dashed border-[var(--line)] p-10 text-center"><Bell className="mx-auto text-[var(--muted)]"/><h2 className="mt-3 font-bold">Пока нет уведомлений</h2><p className="mt-1 text-sm text-[var(--muted)]">Новые сообщения появятся здесь.</p></div> : <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"><section className="space-y-2" aria-label="Список уведомлений">{items.map((item) => <button key={item.id} type="button" onClick={() => void openItem(item, true)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === item.id ? "border-[var(--accent)] bg-[var(--accent)]/5" : "border-[var(--line)] hover:border-[var(--accent)]"} ${!item.readAt ? "bg-[var(--surface)]" : ""}`}><div className="flex items-start gap-2"><span className="mt-0.5 text-[var(--accent)]">{renderIcon(item.type)}</span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><strong className={`line-clamp-2 text-sm ${!item.readAt ? "font-extrabold" : "font-semibold"}`}>{item.title || typeLabel(item.type)}</strong>{!item.readAt && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]" aria-label="Непрочитано"/>}</div><p className="mt-1 line-clamp-3 text-sm text-[var(--muted)] lg:line-clamp-none">{preview(item.text)}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]"><span className="rounded-full border border-[var(--line)] px-2 py-0.5">{typeLabel(item.type)}</span><span>{new Date(item.createdAt).toLocaleString("ru-RU")}</span></div></div></div></button>)}</section><section className="hidden min-h-64 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-6 lg:block">{selected ? <><div className="flex items-start gap-3"><div className="rounded-xl bg-[var(--accent)]/15 p-3 text-[var(--accent)]">{renderIcon(selected.type)}</div><div><span className="text-xs text-[var(--muted)]">{typeLabel(selected.type)}</span><h2 className="mt-1 text-2xl font-bold">{selected.title || typeLabel(selected.type)}</h2></div></div><p className="mt-6 whitespace-pre-wrap text-sm leading-7">{selected.text}</p><div className="mt-8 border-t border-[var(--line)] pt-4 text-sm text-[var(--muted)]"><p>От кого: <strong className="text-[var(--foreground)]">{senderLabel(selected)}</strong></p><p className="mt-1">{new Date(selected.createdAt).toLocaleString("ru-RU")}</p></div></> : <div className="grid h-full min-h-56 place-items-center text-sm text-[var(--muted)]">Выберите уведомление слева, чтобы прочитать полностью.</div>}</section></div>}
+    {mobileItem && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 p-2 backdrop-blur-sm lg:hidden" role="presentation" onClick={() => setMobileItem(null)}><section role="dialog" aria-modal="true" aria-labelledby="notification-title" onClick={(event) => event.stopPropagation()} className="flex max-h-[96dvh] min-h-[88dvh] w-full flex-col overflow-y-auto rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-1 text-xs text-[var(--muted)]">{renderIcon(mobileItem.type)}{typeLabel(mobileItem.type)}</span><h2 id="notification-title" className="mt-3 text-xl font-black">{mobileItem.title || typeLabel(mobileItem.type)}</h2></div><button type="button" onClick={() => setMobileItem(null)} aria-label="Закрыть уведомление" className="rounded-lg border border-[var(--line)] p-2"><X size={18}/></button></div><p className="mt-5 flex-1 whitespace-pre-wrap text-sm leading-7">{mobileItem.text}</p><div className="mt-6 border-t border-[var(--line)] pt-4 text-sm"><p className="text-[var(--muted)]">От кого</p><p className="mt-1 font-semibold">{senderLabel(mobileItem)}</p><p className="mt-1 text-xs text-[var(--muted)]">{new Date(mobileItem.createdAt).toLocaleString("ru-RU")}</p></div></section></div>}
+  </main>;
+}

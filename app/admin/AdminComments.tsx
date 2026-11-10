@@ -1,0 +1,5 @@
+"use client";
+import {useEffect,useState} from "react";
+import Link from "next/link";
+type Comment={id:string;listingId:string;authorId:string;text:string;createdAt:string};
+export function AdminComments(){const [comments,setComments]=useState<Comment[]>([]);const [error,setError]=useState("");useEffect(()=>{void fetch("/api/admin/comments").then(async r=>{if(!r.ok)throw new Error("Ошибка загрузки");return await r.json() as {comments:Comment[]};}).then(d=>setComments(d.comments)).catch(()=>setError("Не удалось загрузить комментарии"));},[]);return <section className="grid gap-4"><h2 className="text-xl font-bold">Комментарии модераторов</h2>{error&&<p role="alert">{error}</p>}{comments.map(c=><article key={c.id} className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5"><p className="whitespace-pre-wrap">{c.text}</p><p className="mt-3 break-all text-xs text-[var(--muted)]">Товар: {c.listingId} · {new Date(c.createdAt).toLocaleString("ru-RU")}</p><Link href={`/product/${c.listingId}`} className="mt-3 inline-block text-[var(--accent)]">Перейти к товару</Link></article>)}</section>}
