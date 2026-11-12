@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { OrderStatus } from "@prisma/client";
@@ -99,6 +99,7 @@ export async function PATCH(request: Request) {
     if (order.pushRecipientId) {
       await sendPushToUsers([order.pushRecipientId], "orders", { title: order.pushTitle, body: order.pushText, url: "/notifications" });
     }
+    revalidateTag("public-home-listings", { expire: 0 });
     revalidatePath("/");
     return NextResponse.json({ order: order.order });
   } catch (error) {

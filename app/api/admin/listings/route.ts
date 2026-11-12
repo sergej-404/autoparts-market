@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { ListingStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { adminApiGuard } from "@/lib/admin-api";
@@ -96,6 +96,7 @@ export async function POST(request: Request) {
     data: { title, description, images, categoryId, makeId, modelId, year, compatibility, price, quantity, status, createdById: principal.id },
     include: { make: true, model: true, category: true },
   });
+  revalidateTag("public-home-listings", { expire: 0 });
   revalidatePath("/");
   return NextResponse.json({ listing }, { status: 201 });
 }
@@ -138,7 +139,8 @@ export async function PATCH(request: Request) {
   const compatibility = vehicleChanged ? (makeId ? [{ makeId, modelId, year }] : []) : previous.compatibility === null ? Prisma.JsonNull : previous.compatibility;
   try {
     const listing = await prisma.$transaction(async (tx) => tx.listing.update({ where: { id }, data: { title, description, images, categoryId, status, makeId, modelId, year, compatibility, price, quantity }, include: { make: true, model: true, category: true } }), { isolationLevel: "Serializable" });
-    revalidatePath("/");
+  revalidateTag("public-home-listings", { expire: 0 });
+  revalidatePath("/");
     return NextResponse.json({ listing });
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2025") return NextResponse.json({ error: "Объявление не найдено." }, { status: 404 });
@@ -162,7 +164,8 @@ export async function DELETE(request: Request) {
       if (activeOrders > 0) throw new Error("ACTIVE_ORDERS");
       await tx.listing.delete({ where: { id: listingId } });
     }, { isolationLevel: "Serializable" });
-    revalidatePath("/");
+    revalidateTag("public-home-listings", { expire: 0 });
+  revalidatePath("/");
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof Error && error.message === "ACTIVE_ORDERS") return NextResponse.json({ error: "Нельзя удалить объявление с незавершёнными заказами." }, { status: 409 });

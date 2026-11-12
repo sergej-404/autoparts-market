@@ -26,8 +26,7 @@ const sortOptions: SortOption[] = [
 
 export default function FavoritesClient({ listings }: { listings: PublicListing[] }) {
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const storageScope = sessionPending ? null : (session?.user?.id ?? "guest");
-  const cartKey = storageScope === null ? null : `axion_cart:${storageScope}`;
+  const storageScope = sessionPending ? null : (session?.user?.id ?? null);
   const favoritesKey = storageScope === null ? null : `axion_favorites:${storageScope}`;
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   useEffect(() => {

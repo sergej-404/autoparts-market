@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { Heart, House, LayoutGrid, Search, UserRound, LogOut, Settings, ShoppingCart, CarFront, ShieldCheck, ClipboardList, Shield } from "lucide-react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Heart, House, LayoutGrid, Search, UserRound, LogOut, Settings, ShoppingCart, CarFront, ShieldCheck, ClipboardList, Shield, MoreVertical } from "lucide-react";
 import SearchBox from "@/components/search/SearchBox";
 import { authClient } from "@/lib/auth-client";
 
@@ -14,14 +14,19 @@ export function Header() {
   const router = useRouter();
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [guestMenuOpen, setGuestMenuOpen] = useState(false);
   const [mobileStaffOpen, setMobileStaffOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const guestMenuRef = useRef<HTMLDivElement>(null);
   const mobileStaffRef = useRef<HTMLDivElement>(null);
   const [counts, setCounts] = useState({ favorites: 0, cart: 0, messages: 0, notifications: 0 });
 
-  const storageScope = sessionPending ? null : (session?.user?.id ?? "guest");
-  const readCounts = () => {
-    if (storageScope === null) return;
+  const storageScope = sessionPending ? null : (session?.user?.id ?? null);
+  const readCounts = useCallback(() => {
+    if (storageScope === null) {
+      setCounts({ favorites: 0, cart: 0, messages: 0, notifications: 0 });
+      return;
+    }
     try {
       const favorites = JSON.parse(window.localStorage.getItem(`axion_favorites:${storageScope}`) || "[]") as unknown;
       const cart = JSON.parse(window.localStorage.getItem(`axion_cart:${storageScope}`) || "[]") as unknown;
@@ -33,9 +38,9 @@ export function Header() {
         notifications: current.notifications,
       }));
     } catch {
-      setCounts(current => ({ ...current, favorites: 0, cart: 0 }));
+      setCounts({ favorites: 0, cart: 0, messages: 0, notifications: 0 });
     }
-  };
+  }, [storageScope]);
 
   const badge = (count: number) => count > 0 ? <span className="absolute -right-1 -top-1 grid min-h-[17px] min-w-[17px] place-items-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-black leading-none text-white ring-2 ring-[var(--header)]">{count > 99 ? "99+" : count}</span> : null;
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -65,7 +70,7 @@ export function Header() {
     let active = true;
     let refreshInFlight = false;
     const refreshHeaderCounts = async () => {
-      if (!active || document.visibilityState !== "visible" || refreshInFlight) return;
+      if (!active || !storageScope || document.visibilityState !== "visible" || refreshInFlight) return;
       refreshInFlight = true;
       try {
         const response = await fetch("/api/chat/unread", { cache: "no-store" });
@@ -101,7 +106,7 @@ export function Header() {
       window.removeEventListener("focus", refreshHeaderCounts);
       document.removeEventListener("visibilitychange", refreshHeaderCounts);
     };
-  }, [storageScope]);
+  }, [readCounts, storageScope]);
 
 
   useEffect(() => {
@@ -111,6 +116,22 @@ export function Header() {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
+
+  useEffect(() => {
+    if (!guestMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !guestMenuRef.current?.contains(event.target)) setGuestMenuOpen(false);
+    };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setGuestMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeEscape);
+    };
+  }, [guestMenuOpen]);
 
   useEffect(() => {
     if (!mobileStaffOpen) return;
@@ -208,8 +229,34 @@ export function Header() {
                     </div>
                   )}
                 </div>
+              ) : sessionPending ? (
+                <span className="hidden max-w-36 truncate rounded-lg px-2 py-2 text-sm font-semibold text-white md:inline-flex">Аккаунт…</span>
               ) : (
-                <Link href="/login" aria-label="Войти или зарегистрироваться" className="hidden max-w-36 truncate rounded-lg px-2 py-2 text-sm font-semibold text-white transition hover:bg-white/10 md:inline-flex">{sessionPending ? "Аккаунт…" : "Войти"}</Link>
+                <div ref={guestMenuRef} className="relative hidden items-center gap-1 md:flex">
+                  <Link href="/login" aria-label="Войти или зарегистрироваться" className="max-w-36 truncate rounded-lg px-2 py-2 text-sm font-semibold text-white transition hover:bg-white/10">Войти</Link>
+                  <button
+                    type="button"
+                    aria-label="Навигация для гостя"
+                    aria-haspopup="menu"
+                    aria-expanded={guestMenuOpen}
+                    onClick={() => setGuestMenuOpen((open) => !open)}
+                    className="inline-flex size-9 items-center justify-center rounded-lg text-white transition hover:bg-white/10 hover:text-[var(--accent)]"
+                  >
+                    <MoreVertical size={21} />
+                  </button>
+                  {guestMenuOpen && (
+                    <div role="menu" aria-label="Страницы сайта" className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] p-1 shadow-xl">
+                      <Link role="menuitem" href="/" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Главная</Link>
+                      <Link role="menuitem" href="/catalog" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Каталог товаров</Link>
+                      <Link role="menuitem" href="/favorites" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Избранное</Link>
+                      <Link role="menuitem" href="/cart" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Заказ</Link>
+                      <Link role="menuitem" href="/chat" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Сообщения</Link>
+                      <Link role="menuitem" href="/notifications" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-[var(--foreground)] hover:bg-white/5">Уведомления</Link>
+                      <div className="my-1 border-t border-[var(--line)]" />
+                      <Link role="menuitem" href="/register" onClick={() => setGuestMenuOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--accent)] hover:bg-white/5">Создать аккаунт</Link>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

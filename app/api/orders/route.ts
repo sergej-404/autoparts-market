@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { normalizeRussianPhone } from "@/lib/phone";
@@ -116,6 +116,7 @@ export async function POST(request: Request) {
         pushAdministratorIds.push(...administratorResults.filter((item) => item.created).map((item) => item.userId));
         return { order: createdOrder, pushBuyer, pushAdministratorIds };
       }, { isolationLevel: "Serializable" });
+      revalidateTag("public-home-listings", { expire: 0 });
       revalidatePath("/");
       if (result.pushBuyer) {
         await sendPushToUsers([session.user.id], "orders", {

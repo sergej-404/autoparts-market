@@ -1,70 +1,119 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { ArrowUpRight, Plus } from "lucide-react";
+
 const currentYear = new Date().getFullYear();
 
-const footerGroups = [
+type FooterLink = { label: string; href: string };
+type FooterGroup = { id: string; title: string; links: FooterLink[] };
+
+const footerGroups: FooterGroup[] = [
   {
+    id: "buyers",
     title: "Покупателям",
-    items: ["Каталог товаров", "Подбор по автомобилю", "Избранное", "Корзина", "Мой аккаунт"],
+    links: [
+      { label: "Каталог товаров", href: "/catalog" },
+      { label: "Подбор по автомобилю", href: "/catalog" },
+      { label: "Избранное", href: "/favorites" },
+      { label: "Заказ", href: "/cart" },
+      { label: "Мой аккаунт", href: "/login" },
+    ],
   },
   {
+    id: "help",
     title: "Помощь",
-    items: ["Как оформить заказ", "Доставка и оплата", "Возврат и обмен", "Частые вопросы", "Связаться с нами"],
-  },
-  {
-    title: "Информация",
-    items: ["О компании", "Условия использования", "Политика конфиденциальности", "Обработка персональных данных"],
+    links: [
+      { label: "Как оформить заказ", href: "/cart" },
+      { label: "Связаться с нами", href: "mailto:info@axionx.example" },
+    ],
   },
 ];
 
 export function Footer() {
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
+
   return (
     <footer className="site-footer">
       <div className="footer-inner">
-        <div className="footer-main">
-          <section className="footer-brand" aria-label="О компании AXION X">
-            <div className="footer-logo" aria-label="AXION X">AXION <span>X</span></div>
-            <p className="brand-copy">Автозапчасти для тех, кто ценит надёжность, точность и уверенность в дороге.</p>
-            <p className="footer-tagline">Найдите деталь. <span>Двигайтесь дальше.</span></p>
-            <div className="footer-socials" aria-label="Социальные сети">
-              <span aria-label="Telegram">TG</span>
-              <span aria-label="Instagram">IG</span>
-              <span aria-label="YouTube">YT</span>
-            </div>
-          </section>
-
-          {footerGroups.map((group) => (
-            <section key={group.title} aria-label={group.title}>
-              <h2 className="footer-title">{group.title}</h2>
-              <ul className="footer-links">
-                {group.items.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </section>
-          ))}
-
-          <section aria-label="Контакты">
-            <h2 className="footer-title">Контакты</h2>
-            <div className="contact-stack">
-              <div className="contact-line"><span className="contact-label">Телефон</span><span className="contact-value">+371 20 000 000</span></div>
-              <div className="contact-line"><span className="contact-label">Электронная почта</span><span className="contact-value">info@axionx.example</span></div>
-              <div className="contact-line"><span className="contact-label">Время работы</span><span>Пн–Пт: 09:00–18:00</span></div>
-            </div>
-          </section>
+        <div className={`footer-brand${activeGroup ? " is-hidden" : ""}`}>
+          <div className="footer-logo" aria-label="AXION X">AXION <span>X</span></div>
+          <p className="brand-copy">Автозапчасти для тех, кто ценит надёжность, точность и уверенность в дороге.</p>
+          <p className="footer-tagline">Найдите деталь. <span>Двигайтесь дальше.</span></p>
         </div>
 
-        <section className="footer-cta" aria-label="Помощь с подбором">
-          <div>
-            <h2>Не уверены, какая деталь подойдёт?</h2>
-            <p>Свяжитесь с нами — поможем разобраться с подбором.</p>
-          </div>
-          <span className="footer-cta-label">Задать вопрос <span aria-hidden="true">↗</span></span>
-        </section>
+        <nav className={`footer-nav${activeGroup ? " is-open" : ""}`} aria-label="Навигация в подвале">
+          {footerGroups.map((group, index) => {
+            const isActive = activeGroup === group.id;
+            return (
+              <section className={`footer-level${isActive ? " active" : ""}`} key={group.id}>
+                <button
+                  type="button"
+                  className="footer-level-btn"
+                  aria-expanded={isActive}
+                  aria-controls={`footer-panel-${group.id}`}
+                  onClick={() => setActiveGroup(isActive ? null : group.id)}
+                >
+                  <span className="footer-btn-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="footer-btn-label">{group.title}</span>
+                  <Plus className="footer-btn-icon" size={18} aria-hidden="true" />
+                </button>
+                <div className="footer-level-panel" id={`footer-panel-${group.id}`}>
+                  <div className="footer-level-panel-inner">
+                    <div className="footer-panel-content">
+                      <h2>{group.title}</h2>
+                      <ul className="footer-list">
+                        {group.links.map((item) => (
+                          <li key={item.label}>
+                            <Link href={item.href}>
+                              <span>{item.label}</span>
+                              <ArrowUpRight size={14} aria-hidden="true" />
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            );
+          })}
 
-        <div className="footer-bottom">
-          <p>© {currentYear} AXION X. Все права защищены.</p>
-          <ul className="legal">
-            <li>Конфиденциальность</li>
-            <li>Пользовательское соглашение</li>
-          </ul>
-        </div>
+          <section className={`footer-level footer-contacts${activeGroup === "contacts" ? " active" : ""}`}>
+            <button
+              type="button"
+              className="footer-level-btn"
+              aria-expanded={activeGroup === "contacts"}
+              aria-controls="footer-panel-contacts"
+              onClick={() => setActiveGroup(activeGroup === "contacts" ? null : "contacts")}
+            >
+              <span className="footer-btn-index" aria-hidden="true">03</span>
+              <span className="footer-btn-label">Контакты</span>
+              <Plus className="footer-btn-icon" size={18} aria-hidden="true" />
+            </button>
+            <div className="footer-level-panel" id="footer-panel-contacts">
+              <div className="footer-level-panel-inner">
+                <div className="footer-panel-content">
+                  <h2>Контакты</h2>
+                  <ul className="footer-list contacts-list">
+                    <li><div className="contact-row"><span className="contact-label">Телефон</span><a href="tel:+37120000000">+371 20 000 000</a></div></li>
+                    <li><div className="contact-row"><span className="contact-label">Электронная почта</span><a href="mailto:info@axionx.example">info@axionx.example</a></div></li>
+                    <li><div className="contact-row"><span className="contact-label">Время работы</span><span>Пн–Пт: 09:00–18:00</span></div></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </section>
+        </nav>
+      </div>
+
+      <div className="footer-bottom">
+        <p>© {currentYear} AXION X. Все права защищены.</p>
+        <ul className="legal">
+          <li>Конфиденциальность</li>
+          <li>Пользовательское соглашение</li>
+        </ul>
       </div>
     </footer>
   );

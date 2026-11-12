@@ -2,48 +2,29 @@ import { CategoryIcon } from "@/components/categories/CategoryIcon";
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { ListingCard } from "@/components/cards/ListingCard";
 import { HomeListingCarousel } from "@/components/home/HomeListingCarousel";
-import { prisma } from "@/lib/prisma";
 import { isAllowedListingImage } from "@/lib/listing-image";
-import { getCachedPublicCategories, getCachedPublicMakes } from "@/lib/public-catalog-data";
+import { getCachedHomeListings, getCachedPublicCategories, getCachedPublicMakes } from "@/lib/public-catalog-data";
+import { logPerformanceDuration, measurePerformance, startPerformanceTimer } from "@/lib/performance-diagnostics";
 
 export const revalidate = 60;
 
 const categoryFallbackEmojis = ["🔧", "⚙️", "🛞", "🚗", "🔋", "💡", "🛠️", "🔩"];
 
 export default async function HomePage() {
-  const [categories, favoriteCounts, recentListings, carMakes] = await Promise.all([
-    getCachedPublicCategories(),
-    prisma.listingFavoriteEvent.groupBy({
-      by: ["listingId"],
-      _count: { listingId: true },
-      orderBy: { _count: { listingId: "desc" } },
-      take: 12,
-    }),
-    prisma.listing.findMany({
-      where: { status: { in: ["PUBLISHED", "OUT_OF_STOCK"] } },
-      include: { make: true, model: true, category: true },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    getCachedPublicMakes(),
+  const requestStartedAt = startPerformanceTimer();
+  const [categories, cachedPopularListings, carMakes] = await Promise.all([
+    measurePerformance("home.categories_cache", getCachedPublicCategories()),
+    measurePerformance("home.popular_listings_cache", getCachedHomeListings()),
+    measurePerformance("home.makes_cache", getCachedPublicMakes()),
   ]);
-  const favoriteCountByListing = new Map(favoriteCounts.map((item) => [item.listingId, item._count.listingId]));
-  const favoriteIds = favoriteCounts.map((item) => item.listingId);
-  const favoriteListings = favoriteIds.length
-    ? await prisma.listing.findMany({
-        where: { id: { in: favoriteIds }, status: { in: ["PUBLISHED", "OUT_OF_STOCK"] } },
-        include: { make: true, model: true, category: true },
-      })
-    : [];
-  const favoriteListingsById = new Map(favoriteListings.map((listing) => [listing.id, listing]));
-  const popularListings = [
-    ...favoriteIds.map((id) => favoriteListingsById.get(id)).filter((listing): listing is NonNullable<typeof listing> => Boolean(listing)),
-    ...recentListings.filter((listing) => !favoriteCountByListing.has(listing.id)),
-  ].slice(0, 12).map((listing) => ({ ...listing, images: listing.images.filter(isAllowedListingImage) }));
+  const popularListings = cachedPopularListings.map((listing) => ({
+    ...listing,
+    images: listing.images.filter(isAllowedListingImage),
+  }));
+  logPerformanceDuration("home.data_ready", requestStartedAt);
   // This project has no order/checkout records yet, so sales hits cannot be ranked without inventing sales data.
-  const hitListings: typeof recentListings = [];
+  const hitListings: typeof cachedPopularListings = [];
   return (
     <main className="pb-12">
       <section className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8 lg:pt-7">

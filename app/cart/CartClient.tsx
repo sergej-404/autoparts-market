@@ -13,9 +13,8 @@ const money = (value: number) => `${new Intl.NumberFormat("ru-RU", { maximumFrac
 
 export default function CartClient({ listings }: { listings: PublicListing[] }) {
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const storageScope = sessionPending ? null : (session?.user?.id ?? "guest");
+  const storageScope = sessionPending ? null : (session?.user?.id ?? null);
   const cartKey = storageScope === null ? null : `axion_cart:${storageScope}`;
-  const favoritesKey = storageScope === null ? null : `axion_favorites:${storageScope}`;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);

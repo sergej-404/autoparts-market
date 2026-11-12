@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createNotificationIfEnabled } from "@/lib/notification-preferences";
@@ -57,6 +57,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       return results.filter((item) => item.created).map((item) => item.userId);
     }, { isolationLevel: "Serializable" });
     await sendPushToUsers(pushRecipients, "orders", { title: "Заказ отменён покупателем", body: "Покупатель отменил заказ.", url: "/notifications" });
+    revalidateTag("public-home-listings", { expire: 0 });
     revalidatePath("/");
     return NextResponse.json({ success: true });
   } catch (error) {
